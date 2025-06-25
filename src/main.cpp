@@ -17,6 +17,7 @@
 #define SERVO_DELAY 1500
 #define ACTION_DELAY 1500
 #define PING_INTERVAL 70
+#define VACUUM 8
 
 // === Components ===
 Ultrasonic ultrasonic(TRIG_PIN, ECHO_PIN);
@@ -51,6 +52,8 @@ void setup() {
   Serial.begin(115200);
   myservo.attach(SERVO_PIN);
   myservo.write(90); // Center the servo
+  pinMode(VACUUM, OUTPUT);
+  digitalWrite(VACUUM, HIGH);
   delay(1000); // Initial stabilization
   distance = readPing();
 }
@@ -142,14 +145,17 @@ int readPing() {
 void moveForward() {
   motorLeft.run(FORWARD);
   motorRight.run(FORWARD);
+  digitalWrite(VACUUM, HIGH);
 }
 
 void moveBackward() {
   motorLeft.run(BACKWARD);
   motorRight.run(BACKWARD);
+  digitalWrite(VACUUM, LOW);
 }
 
 void moveStop() {
   motorLeft.run(RELEASE);
   motorRight.run(RELEASE);
+  digitalWrite(VACUUM, HIGH);
 }
