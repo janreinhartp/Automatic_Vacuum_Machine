@@ -5,39 +5,25 @@
 // === Pins ===
 #define TRIG_PIN A0
 #define ECHO_PIN A1
-#define VACUUM 8
-
-#define SERVO_OBS 9        // Obstacle detection servo
-#define SERVO_WATER A2     // Diverter servo for wet/dry
-#define WATER_SENSOR A5    // Digital output pin for water sensor
+#define SERVO_PIN 9
 
 #define M1_IN1 4
 #define M1_IN2 5
 #define M2_IN1 6
 #define M2_IN2 7
 
-// Linear motor (via L298N)
-#define LIN_IN1 30
-#define LIN_IN2 31
-
 // === Constants ===
 #define TURN_DURATION 1500
 #define SERVO_DELAY 1500
 #define ACTION_DELAY 1500
 #define PING_INTERVAL 70
-#define WATER_INTERVAL 200  // How often to check water
-
-#define DIVERTER_WET_ANGLE 0
-#define DIVERTER_DRY_ANGLE 50
+#define VACUUM 8
 
 // === Components ===
 Ultrasonic ultrasonic(TRIG_PIN, ECHO_PIN);
 L298N_Motor motorLeft(M1_IN1, M1_IN2, -1);
 L298N_Motor motorRight(M2_IN2, M2_IN1, -1);
-L298N_Motor linearMotor(LIN_IN1, LIN_IN2, -1);
-
-Servo obsServo;
-Servo diverterServo;
+Servo myservo;
 
 // === Robot State ===
 enum RobotState {
@@ -51,7 +37,6 @@ enum RobotState {
 RobotState state = IDLE;
 unsigned long stateStartTime = 0;
 unsigned long lastPingTime = 0;
-unsigned long lastWaterCheck = 0;
 
 int distance = 20;
 int distanceR = 0;
@@ -62,35 +47,20 @@ int readPing();
 void moveForward();
 void moveBackward();
 void moveStop();
-void handleWaterSensor();
 
 void setup() {
   Serial.begin(115200);
-
-  obsServo.attach(SERVO_OBS);
-  diverterServo.attach(SERVO_WATER);
-
-  obsServo.write(90);          // Center obstacle servo
-  diverterServo.write(DIVERTER_DRY_ANGLE); // Default dry position
-
+  myservo.attach(SERVO_PIN);
+  myservo.write(90); // Center the servo
   pinMode(VACUUM, OUTPUT);
   digitalWrite(VACUUM, HIGH);
-
-  pinMode(WATER_SENSOR, INPUT);
-
+  delay(1000); // Initial stabilization
   distance = readPing();
 }
 
 void loop() {
   unsigned long currentTime = millis();
 
-  // === Handle Water Sensor ===
-  if (currentTime - lastWaterCheck >= WATER_INTERVAL) {
-    lastWaterCheck = currentTime;
-    handleWaterSensor();
-  }
-
-  // === Obstacle Avoidance FSM ===
   switch (state) {
     case IDLE:
       if (currentTime - lastPingTime >= PING_INTERVAL) {
@@ -115,7 +85,7 @@ void loop() {
         moveBackward();
       } else {
         moveStop();
-        obsServo.write(0); // Look right
+        myservo.write(0); // Look right
         state = LOOKING_RIGHT;
         stateStartTime = currentTime;
       }
@@ -126,7 +96,7 @@ void loop() {
         distanceR = readPing();
         Serial.print("Right Distance: ");
         Serial.println(distanceR);
-        obsServo.write(150); // Look left
+        myservo.write(150); // Look left
         state = LOOKING_LEFT;
         stateStartTime = currentTime;
       }
@@ -137,7 +107,7 @@ void loop() {
         distanceL = readPing();
         Serial.print("Left Distance: ");
         Serial.println(distanceL);
-        obsServo.write(60); // Center
+        myservo.write(60); // Center
         state = TURNING;
         stateStartTime = currentTime;
       }
@@ -188,19 +158,4 @@ void moveStop() {
   motorLeft.run(RELEASE);
   motorRight.run(RELEASE);
   digitalWrite(VACUUM, HIGH);
-}
-
-// === Water Sensor Handler ===
-void handleWaterSensor() {
-  int wet = digitalRead(WATER_SENSOR);
-
-  if (wet == HIGH) { // Wet surface
-    diverterServo.write(DIVERTER_WET_ANGLE); // Divert to wet path
-    linearMotor.run(FORWARD);                // Extend
-    Serial.println("Surface Wet: Diverter to Wet, Linear Forward");
-  } else { // Dry surface
-    diverterServo.write(DIVERTER_DRY_ANGLE); // Divert to dry path
-    linearMotor.run(BACKWARD);               // Retract
-    Serial.println("Surface Dry: Diverter to Dry, Linear Backward");
-  }
 }
